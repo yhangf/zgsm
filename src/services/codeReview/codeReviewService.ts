@@ -27,6 +27,8 @@ import type { AxiosRequestConfig } from "axios"
 import { Package } from "../../schemas"
 import { createLogger, ILogger } from "../../utils/logger"
 import { getClientId } from "../../utils/getClientId"
+import { TelemetryService } from "../telemetry"
+import { CodeReviewErrorType } from "./contants"
 
 /**
  * Code Review Service - Singleton
@@ -121,6 +123,7 @@ export class CodeReviewService {
 		await statusBarloginCallback(undefined, undefined, {
 			errorTitle: t("common:review.statusbar.login_expired"),
 		})
+		this.recordReviewError(CodeReviewErrorType.AuthError)
 	}
 
 	// ===== Task Management Methods =====
@@ -184,8 +187,10 @@ export class CodeReviewService {
 			this.logger.error(error)
 			if (error.name === "AuthError") {
 				await this.handleAuthError()
+				return
 			}
-			throw error
+			this.pushErrorToWebview(new Error(t("common:review.tip.service_unavailable")))
+			this.recordReviewError(CodeReviewErrorType.StartReviewError)
 		}
 	}
 
@@ -239,13 +244,16 @@ export class CodeReviewService {
 				if (error.name === "AuthError") {
 					await this.handleAuthError()
 				}
+				this.recordReviewError(CodeReviewErrorType.CancelReviewError)
 				throw error
+			} finally {
+				this.taskAbortController = null
+				this.completeTask()
 			}
-			this.taskAbortController = null
+		} else {
+			// Mark task as completed and send completion message
+			this.completeTask()
 		}
-
-		// Mark task as completed and send completion message
-		this.completeTask()
 	}
 
 	// ===== Issue Management Methods =====
@@ -349,7 +357,9 @@ export class CodeReviewService {
 			this.logger.error(`Failed to update issue status: issueId=${issueId}, error=${error}`)
 			if (error.name === "AuthError") {
 				await this.handleAuthError()
+				return
 			}
+			this.recordReviewError(CodeReviewErrorType.UpdateIssueError)
 			throw error
 		}
 	}
@@ -510,6 +520,7 @@ export class CodeReviewService {
 					await this.handleAuthError()
 					break
 				}
+				this.recordReviewError(CodeReviewErrorType.FetchResultError)
 				// Send error message to webview with unified event
 				this.sendReviewTaskUpdateMessage(TaskStatus.ERROR, {
 					issues: this.getAllCachedIssues(),
@@ -548,6 +559,10 @@ export class CodeReviewService {
 	private handlePollingError(error: any): void {
 		this.logger.error("Polling error:", error)
 		// TODO: Implement retry logic or error recovery if needed
+	}
+
+	private recordReviewError(type: string) {
+		TelemetryService.instance.captureError(`CodeReviewError.${type}`)
 	}
 
 	/**

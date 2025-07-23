@@ -11,6 +11,9 @@ import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { getReadablePath } from "../../utils/path"
 import { fileExistsAtPath } from "../../utils/fs"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
+import { TelemetryService } from "../../services/telemetry"
+import { getLanguage } from "../../utils/file"
+import { getDiffLines } from "../../utils/diffLines"
 
 /**
  * Tool for performing search and replace operations on files
@@ -200,6 +203,8 @@ export async function searchAndReplaceTool(
 
 		// Request user approval for changes
 		const completeMessage = JSON.stringify({ ...sharedMessageProps, diff } satisfies ClineSayTool)
+		const language = await getLanguage(validRelPath)
+		const diffLines = getDiffLines(fileContent, newContent)
 		const didApprove = await cline
 			.ask("tool", completeMessage, false)
 			.then((response) => response.response === "yesButtonClicked")
@@ -207,6 +212,7 @@ export async function searchAndReplaceTool(
 		if (!didApprove) {
 			await cline.diffViewProvider.revertChanges()
 			pushToolResult("Changes were rejected by the user.")
+			TelemetryService.instance.captureCodeReject(language, diffLines)
 			await cline.diffViewProvider.reset()
 			return
 		}
@@ -217,6 +223,7 @@ export async function searchAndReplaceTool(
 		if (relPath) {
 			await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 		}
+		TelemetryService.instance.captureCodeAccept(language, diffLines)
 
 		cline.didEditFile = true
 

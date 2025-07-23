@@ -49,6 +49,7 @@ import { DiffViewProvider } from "../../integrations/editor/DiffViewProvider"
 import { findToolName, formatContentBlockToMarkdown } from "../../integrations/misc/export-markdown"
 import { RooTerminalProcess } from "../../integrations/terminal/types"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
+import { TelemetryService } from "../../services/telemetry"
 
 // utils
 import { calculateApiCostAnthropic } from "../../utils/cost"
@@ -1786,7 +1787,7 @@ export class Task extends EventEmitter<ClineEvents> {
 ${t("apiErrors:solution.quota-check.checkRemainingQuota")} “ <mark hash=${hash} type="CREDIT">${t("apiErrors:solution.quota-check.creditUsageStats")}</mark> ” ${t("apiErrors:solution.quota-check.viewDetails")}
 `
 				}
-
+				TelemetryService.instance.captureError(`ApiError_${code}`)
 				this.providerRef
 					.deref()
 					?.log(`[Costrict#apiErrors] task ${taskId}.${instanceId} Raw Error: ${rawError}`)
@@ -1796,7 +1797,13 @@ ${t("apiErrors:solution.quota-check.checkRemainingQuota")} “ <mark hash=${hash
 		}
 
 		const _err = defaultApiErrors[status] || unknownError
-
+		if (defaultApiErrors[status]) {
+			TelemetryService.instance.captureError(
+				status === undefined ? `ApiError_unknown` : `ApiError_status_${status}`,
+			)
+		} else {
+			TelemetryService.instance.captureError(`ApiError_unknown`)
+		}
 		this.providerRef.deref()?.log(`[Costrict#apiErrors] task ${taskId}.${instanceId} Raw Error: ${rawError}`)
 
 		return `${t("apiErrors:request.error_details")}\n\n${_err.status}\n\n${t("apiErrors:request.solution")}\n\n${_err.solution}`
@@ -1843,7 +1850,7 @@ ${t("apiErrors:solution.quota-check.checkRemainingQuota")} “ <mark hash=${hash
 		}
 
 		this.toolUsage[toolName].failures++
-
+		TelemetryService.instance.captureError(`ToolUsageError_${toolName}`)
 		if (error) {
 			this.emit("taskToolFailed", this.taskId, toolName, error)
 		}

@@ -19,6 +19,16 @@ import { createReviewTaskAPI, getReviewResultsAPI, updateIssueStatusAPI, cancelR
 import { ReviewTarget, ReviewTargetType } from "../types"
 import { ReviewIssue, IssueStatus, TaskStatus, SeverityLevel } from "../../../shared/codeReview"
 
+// Mock TelemetryService
+jest.mock("../../telemetry", () => ({
+	TelemetryService: {
+		instance: {
+			captureError: jest.fn(),
+			captureEvent: jest.fn(),
+		},
+	},
+}))
+
 // Mock vscode
 jest.mock(
 	"vscode",
@@ -362,8 +372,8 @@ describe("CodeReviewService", () => {
 			const error = new Error("API Error")
 			;(createReviewTaskAPI as jest.Mock).mockRejectedValue(error)
 
-			// Attempt to start task
-			await expect(service.startReviewTask([mockReviewTarget])).rejects.toThrow("API Error")
+			// Attempt to start task - should not throw error, but handle it silently
+			await expect(service.startReviewTask([mockReviewTarget])).resolves.not.toThrow()
 
 			// Verify cleanup after error
 			expect(service.getCurrentTask()).toBeNull()
@@ -412,7 +422,6 @@ describe("CodeReviewService", () => {
 					values: expect.objectContaining({
 						status: TaskStatus.COMPLETED,
 						data: expect.objectContaining({
-							issues: [],
 							progress: 0,
 						}),
 					}),

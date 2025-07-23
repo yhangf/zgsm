@@ -142,7 +142,7 @@ export class CompletionTrace {
 			status: client.errors,
 		}
 		client.context.globalState.update("trace", data)
-		if (client.openApiError == client.lastUploadError) {
+		if (client.openApiError === client.lastUploadError) {
 			return
 		}
 		const baseUrl = await client.getBaseUrl()

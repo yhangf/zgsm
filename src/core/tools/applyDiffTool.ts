@@ -7,9 +7,12 @@ import { Task } from "../task/Task"
 import { ToolUse, RemoveClosingTag, AskApproval, HandleError, PushToolResult } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
 import { fileExistsAtPath } from "../../utils/fs"
+import { getDiffLines } from "../../utils/diffLines"
+import { getLanguage } from "../../utils/file"
 import { addLineNumbers } from "../../integrations/misc/extract-text"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { telemetryService } from "../../services/telemetry/TelemetryService"
+import { TelemetryService } from "../../services/telemetry"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 
 export async function applyDiffTool(
@@ -156,9 +159,11 @@ export async function applyDiffTool(
 			}
 
 			const didApprove = await askApproval("tool", completeMessage, toolProgressStatus)
-
+			const fileLanguage = await getLanguage(absolutePath)
+			const changedLines = getDiffLines(originalContent, diffResult.content)
 			if (!didApprove) {
 				await cline.diffViewProvider.revertChanges() // Cline likely handles closing the diff view
+				TelemetryService.instance.captureCodeReject(fileLanguage, changedLines)
 				return
 			}
 
@@ -168,6 +173,7 @@ export async function applyDiffTool(
 			if (relPath) {
 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 			}
+			TelemetryService.instance.captureCodeAccept(fileLanguage, changedLines)
 
 			// Used to determine if we should wait for busy terminal to update before sending api request
 			cline.didEditFile = true

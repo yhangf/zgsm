@@ -10,6 +10,9 @@ import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { fileExistsAtPath } from "../../utils/fs"
 import { insertGroups } from "../diff/insert-groups"
+import { TelemetryService } from "../../services/telemetry"
+import { getLanguage } from "../../utils/file"
+import { getDiffLines } from "../../utils/diffLines"
 
 export async function insertContentTool(
 	cline: Task,
@@ -121,10 +124,12 @@ export async function insertContentTool(
 		const didApprove = await cline
 			.ask("tool", completeMessage, false)
 			.then((response) => response.response === "yesButtonClicked")
-
+		const language = await getLanguage(relPath)
+		const diffLines = getDiffLines(fileContent, updatedContent)
 		if (!didApprove) {
 			await cline.diffViewProvider.revertChanges()
 			pushToolResult("Changes were rejected by the user.")
+			TelemetryService.instance.captureCodeReject(language, diffLines)
 			return
 		}
 
@@ -134,7 +139,7 @@ export async function insertContentTool(
 		if (relPath) {
 			await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 		}
-
+		TelemetryService.instance.captureCodeAccept(language, diffLines)
 		cline.didEditFile = true
 
 		if (!userEdits) {

@@ -13,6 +13,8 @@ import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { detectCodeOmission } from "../../integrations/editor/detect-omission"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
+import { TelemetryService } from "../../services/telemetry"
+import { getLanguage } from "../../utils/file"
 
 export async function writeToFileTool(
 	cline: Task,
@@ -200,11 +202,12 @@ export async function writeToFileTool(
 					? formatResponse.createPrettyPatch(relPath, cline.diffViewProvider.originalContent, newContent)
 					: undefined,
 			} satisfies ClineSayTool)
-
 			const didApprove = await askApproval("tool", completeMessage)
-
+			const language = await getLanguage(relPath)
+			const lines = newContent.split("\n").length
 			if (!didApprove) {
 				await cline.diffViewProvider.revertChanges()
+				TelemetryService.instance.captureCodeReject(language, lines)
 				return
 			}
 
@@ -214,7 +217,7 @@ export async function writeToFileTool(
 			if (relPath) {
 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 			}
-
+			TelemetryService.instance.captureCodeAccept(language, lines)
 			cline.didEditFile = true // used to determine if we should wait for busy terminal to update before sending api request
 
 			if (userEdits) {

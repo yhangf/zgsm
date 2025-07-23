@@ -22,6 +22,7 @@ import { DIFF_VIEW_URI_SCHEME } from "./integrations/editor/DiffViewProvider"
 import { TerminalRegistry } from "./integrations/terminal/TerminalRegistry"
 import { McpServerManager } from "./services/mcp/McpServerManager"
 import { telemetryService } from "./services/telemetry/TelemetryService"
+import { TelemetryService, PrometheusTelemetryClient } from "./services/telemetry"
 import { CodeReviewService } from "./services/codeReview/codeReviewService"
 import { CommentService } from "./integrations/comment"
 import { API } from "./exports/api"
@@ -118,11 +119,22 @@ export async function activate(context: vscode.ExtensionContext) {
 			return providerSettings
 		},
 	)
-	telemetryService.setProvider(provider)
-	await zgsm.activate(context, provider)
-	ZgsmCodeBaseSyncService.setProvider(provider)
 	const zgsmApiKey = provider.getValue("zgsmApiKey")
 	const zgsmBaseUrl = provider.getValue("zgsmBaseUrl") || defaultZgsmAuthConfig.baseUrl
+
+	const telemetryClient = TelemetryService.createInstance()
+
+	try {
+		const client = new PrometheusTelemetryClient(`${zgsmBaseUrl}/pushgateway/api/v1`, false)
+		telemetryClient.register(client)
+	} catch (error) {
+		console.warn("Failed to register PrometheusTelemetryClient:", error)
+	}
+	telemetryService.setProvider(provider)
+	TelemetryService.instance.setProvider(provider as any)
+	await zgsm.activate(context, provider)
+	ZgsmCodeBaseSyncService.setProvider(provider)
+
 	const commentService = CommentService.getInstance()
 	const codeReviewService = CodeReviewService.getInstance()
 	codeReviewService.setProvider(provider)
@@ -258,5 +270,6 @@ export async function deactivate() {
 	await McpServerManager.cleanup(extensionContext)
 	telemetryService.shutdown()
 	TerminalRegistry.cleanup()
+	TelemetryService.instance.shutdown()
 	loggerDeactivate()
 }
