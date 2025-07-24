@@ -511,6 +511,14 @@
 						"type": "boolean",
 						"default": false,
 						"description": "%auth.response.showNotification.description%"
+					},
+					"AutoCommit": {
+						"type": "boolean",
+						"default": false,
+						"description": "%settings.autoCommit.description%",
+						"tags": [
+							"experimental"
+						]
 					}
 				}
 			},

@@ -15,6 +15,7 @@ import { detectCodeOmission } from "../../integrations/editor/detect-omission"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
 import { TelemetryService } from "../../services/telemetry"
 import { getLanguage } from "../../utils/file"
+import { autoCommit } from "../../utils/git"
 
 export async function writeToFileTool(
 	cline: Task,
@@ -218,6 +219,15 @@ export async function writeToFileTool(
 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 			}
 			TelemetryService.instance.captureCodeAccept(language, lines)
+			// Check if AutoCommit is enabled before committing
+			const autoCommitEnabled = vscode.workspace.getConfiguration().get<boolean>("AutoCommit", false)
+			if (autoCommitEnabled) {
+				autoCommit(relPath, cline.cwd, {
+					model: cline.api.getModel().id,
+					editorName: vscode.env.appName,
+					date: new Date().toLocaleString(),
+				})
+			}
 			cline.didEditFile = true // used to determine if we should wait for busy terminal to update before sending api request
 
 			if (userEdits) {

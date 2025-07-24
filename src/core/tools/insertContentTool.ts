@@ -1,6 +1,7 @@
 import delay from "delay"
 import fs from "fs/promises"
 import path from "path"
+import * as vscode from "vscode"
 
 import { getReadablePath } from "../../utils/path"
 import { Task } from "../task/Task"
@@ -13,6 +14,7 @@ import { insertGroups } from "../diff/insert-groups"
 import { TelemetryService } from "../../services/telemetry"
 import { getLanguage } from "../../utils/file"
 import { getDiffLines } from "../../utils/diffLines"
+import { autoCommit } from "../../utils/git"
 
 export async function insertContentTool(
 	cline: Task,
@@ -140,6 +142,16 @@ export async function insertContentTool(
 			await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 		}
 		TelemetryService.instance.captureCodeAccept(language, diffLines)
+		// Check if AutoCommit is enabled before committing
+		const autoCommitEnabled = vscode.workspace.getConfiguration().get<boolean>("AutoCommit", false)
+		if (autoCommitEnabled) {
+			autoCommit(relPath, cline.cwd, {
+				model: cline.api.getModel().id,
+				editorName: vscode.env.appName,
+				date: new Date().toLocaleString(),
+			})
+		}
+
 		cline.didEditFile = true
 
 		if (!userEdits) {

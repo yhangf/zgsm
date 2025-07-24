@@ -2,6 +2,7 @@
 import path from "path"
 import fs from "fs/promises"
 import delay from "delay"
+import * as vscode from "vscode"
 
 // Internal imports
 import { Task } from "../task/Task"
@@ -14,6 +15,7 @@ import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { TelemetryService } from "../../services/telemetry"
 import { getLanguage } from "../../utils/file"
 import { getDiffLines } from "../../utils/diffLines"
+import { autoCommit } from "../../utils/git"
 
 /**
  * Tool for performing search and replace operations on files
@@ -224,6 +226,16 @@ export async function searchAndReplaceTool(
 			await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 		}
 		TelemetryService.instance.captureCodeAccept(language, diffLines)
+
+		// Check if AutoCommit is enabled before committing
+		const autoCommitEnabled = vscode.workspace.getConfiguration().get<boolean>("AutoCommit", false)
+		if (autoCommitEnabled) {
+			autoCommit(relPath as string, cline.cwd, {
+				model: cline.api.getModel().id,
+				editorName: vscode.env.appName,
+				date: new Date().toLocaleString(),
+			})
+		}
 
 		cline.didEditFile = true
 

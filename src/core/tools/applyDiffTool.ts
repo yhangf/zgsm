@@ -1,5 +1,6 @@
 import path from "path"
 import fs from "fs/promises"
+import * as vscode from "vscode"
 
 import { ClineSayTool } from "../../shared/ExtensionMessage"
 import { getReadablePath } from "../../utils/path"
@@ -14,6 +15,7 @@ import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { telemetryService } from "../../services/telemetry/TelemetryService"
 import { TelemetryService } from "../../services/telemetry"
 import { unescapeHtmlEntities } from "../../utils/text-normalization"
+import { autoCommit } from "../../utils/git"
 
 export async function applyDiffTool(
 	cline: Task,
@@ -174,6 +176,16 @@ export async function applyDiffTool(
 				await cline.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 			}
 			TelemetryService.instance.captureCodeAccept(fileLanguage, changedLines)
+
+			// Check if AutoCommit is enabled before committing
+			const autoCommitEnabled = vscode.workspace.getConfiguration().get<boolean>("AutoCommit", false)
+			if (autoCommitEnabled) {
+				autoCommit(relPath, cline.cwd, {
+					model: cline.api.getModel().id,
+					editorName: vscode.env.appName,
+					date: new Date().toLocaleString(),
+				})
+			}
 
 			// Used to determine if we should wait for busy terminal to update before sending api request
 			cline.didEditFile = true
